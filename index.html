@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
 <title>Estimador de tiempo en trail</title>
 
 <style>
@@ -13,46 +13,16 @@
   --muted:#6b7280;
   --border:#e5e7eb;
   --soft:#f9fafb;
-  --highlight:#dbeafe;
-  --success:#dcfce7;
 }
 
-body{
-  margin:0;
-  background:var(--bg);
-  font-family:system-ui;
-  color:var(--text);
-}
+body{margin:0;background:var(--bg);font-family:system-ui;color:var(--text);}
+.wrap{max-width:1200px;margin:20px auto;padding:10px;}
+.card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px;}
 
-.wrap{
-  max-width:1200px;
-  margin:20px auto;
-  padding:10px;
-}
+.grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;}
+@media(max-width:900px){.grid{grid-template-columns:1fr;}}
 
-.card{
-  background:var(--card);
-  border:1px solid var(--border);
-  border-radius:14px;
-  padding:18px;
-}
-
-.grid{
-  display:grid;
-  grid-template-columns:1fr 1fr 1fr;
-  gap:12px;
-}
-
-@media(max-width:900px){
-  .grid{grid-template-columns:1fr;}
-}
-
-.block{
-  background:var(--soft);
-  border:1px solid var(--border);
-  border-radius:12px;
-  padding:12px;
-}
+.block{background:var(--soft);border:1px solid var(--border);border-radius:12px;padding:12px;}
 
 input,select{
   width:100%;
@@ -64,8 +34,9 @@ input,select{
 
 .result{
   background:#eef2f7;
-  padding:10px;
+  border:1px dashed #cbd5e1;
   border-radius:10px;
+  padding:10px;
   margin-top:10px;
   font-weight:600;
 }
@@ -77,7 +48,6 @@ button{
   border:1px solid var(--border);
   cursor:pointer;
 }
-
 </style>
 </head>
 
@@ -85,7 +55,7 @@ button{
 <div class="wrap">
 <div class="card">
 
-<h2>Estimador de tiempo trail</h2>
+<h2>Estimador de tiempo en trail</h2>
 
 <div class="grid">
 
@@ -95,11 +65,24 @@ button{
 <input id="r1d" placeholder="Distancia km">
 <input id="r1e" placeholder="Desnivel +">
 <input id="r1t" placeholder="Tiempo (min)">
+
 <select id="r1tech">
-<option value="1">Baja</option>
-<option value="1.08">Media</option>
-<option value="1.18">Alta</option>
-<option value="1.30">Muy alta</option>
+<option value="low">Baja</option>
+<option value="medium">Media</option>
+<option value="high">Alta</option>
+<option value="very_high">Muy alta</option>
+</select>
+
+<select id="r1alt">
+<option value="low">0–1000 m</option>
+<option value="mid">1000–2000 m</option>
+<option value="high">2000–3000 m</option>
+</select>
+
+<select id="r1heat">
+<option value="low">Poco</option>
+<option value="medium">Medio</option>
+<option value="high">Alto</option>
 </select>
 </div>
 
@@ -109,30 +92,57 @@ button{
 <input id="r2d" placeholder="Distancia km">
 <input id="r2e" placeholder="Desnivel +">
 <input id="r2t" placeholder="Tiempo (min)">
+
 <select id="r2tech">
-<option value="1">Baja</option>
-<option value="1.08">Media</option>
-<option value="1.18">Alta</option>
-<option value="1.30">Muy alta</option>
+<option value="low">Baja</option>
+<option value="medium">Media</option>
+<option value="high">Alta</option>
+<option value="very_high">Muy alta</option>
+</select>
+
+<select id="r2alt">
+<option value="low">0–1000 m</option>
+<option value="mid">1000–2000 m</option>
+<option value="high">2000–3000 m</option>
+</select>
+
+<select id="r2heat">
+<option value="low">Poco</option>
+<option value="medium">Medio</option>
+<option value="high">Alto</option>
 </select>
 
 <select id="profile">
-<option value="1">Equilibrado</option>
-<option value="1.1">Explosivo</option>
-<option value="0.9">Resistente</option>
+<option value="balanced">Equilibrado</option>
+<option value="speed">Explosivo</option>
+<option value="ultra">Resistente</option>
 </select>
 </div>
 
 <!-- TARGET -->
 <div class="block">
-<h3>Objetivo</h3>
+<h3>Carrera objetivo</h3>
+
 <input id="td" placeholder="Distancia km">
 <input id="te" placeholder="Desnivel +">
+
 <select id="ttech">
-<option value="1">Baja</option>
-<option value="1.08">Media</option>
-<option value="1.18">Alta</option>
-<option value="1.30">Muy alta</option>
+<option value="low">Baja</option>
+<option value="medium">Media</option>
+<option value="high">Alta</option>
+<option value="very_high">Muy alta</option>
+</select>
+
+<select id="talt">
+<option value="low">0–1000 m</option>
+<option value="mid">1000–2000 m</option>
+<option value="high">2000–3000 m</option>
+</select>
+
+<select id="theat">
+<option value="low">Poco</option>
+<option value="medium">Medio</option>
+<option value="high">Alto</option>
 </select>
 
 <div class="result" id="result">—</div>
@@ -147,74 +157,114 @@ button{
 
 <script>
 
-function effort(d,e){
-  return d + e/100;
+const TECH = {low:1, medium:1.08, high:1.18, very_high:1.30};
+const ALT = {low:1, mid:1.04, high:1.09};
+const HEAT = {low:1, medium:1.04, high:1.09};
+
+function effort(d,e){return d + e/100;}
+
+function profileFactors(p){
+  if(p==="speed") return {long:1.12, ultra:1.1};
+  if(p==="ultra") return {long:0.92, ultra:0.9};
+  return {long:1, ultra:1};
 }
 
-function extrapolation(ratio, profile){
-  let p=1;
-  if(ratio>1){
-    p*=Math.pow(ratio,0.028*profile);
-  }
-  if(ratio>1.8){
-    p*=Math.pow(ratio/1.8,0.04*profile);
-  }
-  if(ratio>2.6){
-    p*=Math.pow(ratio/2.6,0.055*profile);
-  }
-  return p;
+function ultraMultiplier(d,e,p){
+  const pf=profileFactors(p);
+  let m=1;
+
+  if(d>60) m+= (d-60)*0.0005*pf.long;
+  if(d>100) m+= (d-100)*0.001*pf.long;
+  if(d>140) m+= (d-140)*0.0015*pf.ultra;
+
+  if(e>160) m+= Math.min((e-160)*0.0005,0.1);
+  if(e>220) m+= Math.min((e-220)*0.00045,0.08);
+
+  return m;
 }
 
-function index(d,e,t,tech,profile,targetD){
+function extrapolation(ref,tar,p){
+  const pf=profileFactors(p);
+  const dr=tar.d/ref.d;
+  const er=tar.eff/ref.eff;
+
+  let pen=1;
+
+  if(dr>1) pen*=Math.pow(dr,0.028*pf.long);
+  if(dr>1.8) pen*=Math.pow(dr/1.8,0.04*pf.long);
+  if(dr>2.6) pen*=Math.pow(dr/2.6,0.055*pf.ultra);
+
+  if(er>1.2) pen*=Math.pow(er,0.018*pf.long);
+
+  return pen;
+}
+
+function buildRace(d,e,t,tech,alt,heat,p){
   const eff=effort(d,e);
-  const base=t/(eff*tech);
-  const ratio=targetD/d;
-  return base*extrapolation(ratio,profile);
+  const cond=TECH[tech]*ALT[alt]*HEAT[heat];
+  const ultra=ultraMultiplier(d,eff,p);
+
+  return {
+    d,e,t,
+    eff,
+    cond,
+    ultra,
+    idx: t/(eff*cond*ultra)
+  };
+}
+
+function similarity(r,t){
+  const dg=Math.abs(Math.log(t.d/r.d));
+  const eg=Math.abs(Math.log(t.eff/r.eff));
+  return 1/(0.2 + dg*0.55 + eg*0.45);
 }
 
 function calc(){
 
-  const r1d=+r1d.value;
-  const r1e=+r1e.value;
-  const r1t=+r1t.value;
-  const r1tech=+r1tech.value;
+  const p=profile.value;
 
-  const r2d=+r2d.value;
-  const r2e=+r2e.value;
-  const r2t=+r2t.value;
-  const r2tech=+r2tech.value;
+  const r1=buildRace(+r1d.value,+r1e.value,+r1t.value,r1tech.value,r1alt.value,r1heat.value,p);
 
-  const td=+td.value;
-  const te=+te.value;
-  const ttech=+ttech.value;
-  const profile=+profile.value;
+  const tRace={
+    d:+td.value,
+    e:+te.value
+  };
 
-  const teff=effort(td,te);
+  tRace.eff=effort(tRace.d,tRace.e);
+
+  const tCond=TECH[ttech.value]*ALT[talt.value]*HEAT[theat.value];
+  const tUltra=ultraMultiplier(tRace.d,tRace.eff,p);
+
+  let refs=[r1];
+
+  if(r2d.value){
+    const r2=buildRace(+r2d.value,+r2e.value,+r2t.value,r2tech.value,r2alt.value,r2heat.value,p);
+    refs.push(r2);
+  }
 
   let idx;
 
-  if(r2d){
-    const i1=index(r1d,r1e,r1t,r1tech,profile,td);
-    const i2=index(r2d,r2e,r2t,r2tech,profile,td);
-
-    const w1=1/Math.abs(td-r1d);
-    const w2=1/Math.abs(td-r2d);
-
-    idx=(i1*w1+i2*w2)/(w1+w2);
+  if(refs.length===1){
+    idx = refs[0].idx * extrapolation(refs[0],tRace,p);
   }else{
-    idx=index(r1d,r1e,r1t,r1tech,profile,td);
+    const w = refs.map(r=>similarity(r,tRace));
+    const sum = w.reduce((a,b)=>a+b,0);
+
+    idx = refs.reduce((acc,r,i)=>{
+      const adj = r.idx * extrapolation(r,tRace,p);
+      return acc + adj*(w[i]/sum);
+    },0);
   }
 
-  const time=idx*teff*ttech;
+  const time = idx * tRace.eff * tCond * tUltra;
 
-  const low=time*0.98;
-  const high=time*1.02;
+  const low = time*0.98;
+  const high = time*1.02;
 
-  result.innerHTML=Math.round(time)+" min";
-  range.innerHTML="Rango: "+Math.round(low)+" - "+Math.round(high)+" min";
+  result.innerHTML = Math.round(time) + " min";
+  range.innerHTML = "Rango: " + Math.round(low) + " – " + Math.round(high) + " min";
 }
 
 </script>
-
 </body>
 </html>
