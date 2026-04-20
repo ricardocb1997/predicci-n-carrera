@@ -22,9 +22,10 @@
 
       --readonly-bg:#eef2f7;
       --readonly-border:#cbd5e1;
-      --info-bg:#eff6ff;
-      --info-border:#bfdbfe;
-      --info-text:#1d4ed8;
+
+      --badge-bg:#dbeafe;
+      --badge-border:#93c5fd;
+      --badge-text:#1d4ed8;
     }
 
     *{box-sizing:border-box}
@@ -127,7 +128,7 @@
       font-weight:600;
     }
 
-    .result-input-wrap{
+    .result-wrap{
       background:#f8fafc;
       border:1px solid var(--readonly-border);
       border-radius:10px;
@@ -150,37 +151,41 @@
     .result-badge{
       font-size:0.72rem;
       font-weight:600;
-      color:var(--info-text);
-      background:var(--info-bg);
-      border:1px solid var(--info-border);
+      color:var(--badge-text);
+      background:var(--badge-bg);
+      border:1px solid var(--badge-border);
       border-radius:999px;
       padding:2px 8px;
       white-space:nowrap;
     }
 
     .target-note{
-      margin:0 0 10px 0;
+      margin:0 0 4px 0;
       font-size:0.82rem;
       color:var(--muted);
       line-height:1.45;
     }
 
-    .forecast-note{
-      margin:2px 0 10px 0;
-      font-size:0.82rem;
+    .guide{
+      margin-top:8px;
+      font-size:0.86rem;
       color:var(--muted);
-      line-height:1.45;
+      line-height:1.5;
       background:#fff;
       border:1px solid var(--border);
       border-radius:10px;
       padding:10px;
     }
 
-    .quick-buttons{
-      display:flex;
-      gap:6px;
-      flex-wrap:wrap;
-      margin-bottom:8px;
+    .target-actions{
+      margin-top:10px;
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:8px;
+    }
+
+    @media (max-width: 560px){
+      .target-actions{grid-template-columns:1fr;}
     }
 
     button{
@@ -194,17 +199,6 @@
 
     button:hover{
       background:#eef2f7;
-    }
-
-    .target-actions{
-      margin-top:10px;
-      display:grid;
-      grid-template-columns:1fr 1fr;
-      gap:8px;
-    }
-
-    @media (max-width: 560px){
-      .target-actions{grid-template-columns:1fr;}
     }
 
     .calc-btn{
@@ -298,19 +292,12 @@
           <option value="high">Alto</option>
         </select>
 
-        <div class="quick-buttons">
-          <button class="preset"
-                  data-target="reference"
-                  data-distance="42"
-                  data-elevation="3800"
-                  data-hours="5"
-                  data-minutes="15"
-                  data-seconds="0"
-                  data-technicality="high"
-                  data-altitude="mid"
-                  data-heat="low">
-            Ejemplo 42 / 3800+
-          </button>
+        <div class="guide">
+          <strong>Guía de tecnicidad</strong><br>
+          Baja = terreno muy corrible.<br>
+          Media = sendero de montaña normal.<br>
+          Alta = terreno roto que frena bastante.<br>
+          Muy alta = terreno muy técnico.
         </div>
       </div>
 
@@ -328,7 +315,7 @@
           </div>
         </div>
 
-        <div class="result-input-wrap">
+        <div class="result-wrap">
           <div class="result-input-label">
             <label class="field-label" for="targetTimeH">Tiempo estimado</label>
             <span class="result-badge">Resultado automático</span>
@@ -350,14 +337,9 @@
           </div>
 
           <div class="target-note">
-            Estos campos no se completan manualmente. Se rellenan automáticamente al pulsar
+            Estos campos no se rellenan manualmente. Se completan automáticamente al pulsar
             <strong>Estimar tiempo</strong>.
           </div>
-        </div>
-
-        <div class="forecast-note">
-          En la carrera objetivo, la <strong>tecnicidad</strong> y el <strong>calor</strong> se introducen como
-          <strong>previsión</strong>, ya que la carrera todavía no se ha realizado.
         </div>
 
         <label class="field-label" for="targetTechnicality">Tecnicidad prevista</label>
@@ -381,18 +363,6 @@
           <option value="medium">Medio</option>
           <option value="high">Alto</option>
         </select>
-
-        <div class="quick-buttons">
-          <button class="preset"
-                  data-target="target"
-                  data-distance="60"
-                  data-elevation="3000"
-                  data-technicality="low"
-                  data-altitude="mid"
-                  data-heat="low">
-            Ejemplo 60 / 3000+
-          </button>
-        </div>
 
         <div class="target-actions">
           <button class="calc-btn" id="btnEstimate">Estimar tiempo</button>
@@ -432,7 +402,6 @@ const HEAT_FACTORS = {
 };
 
 const VERTICAL_EQUIVALENCE = 100;
-const FATIGUE_EXPONENT = 0.06;
 const MIN_COMBINED_ADJUSTMENT = 0.85;
 const MAX_COMBINED_ADJUSTMENT = 1.20;
 
@@ -486,13 +455,12 @@ function kmEffort(distanceKm, elevationM){
 }
 
 function combinedConditionFactor(technicality, altitude, heat){
-  const factor = TECHNICALITY_FACTORS[technicality] * ALTITUDE_FACTORS[altitude] * HEAT_FACTORS[heat];
-  return Math.max(MIN_COMBINED_ADJUSTMENT, Math.min(MAX_COMBINED_ADJUSTMENT, factor));
-}
+  const factor =
+    TECHNICALITY_FACTORS[technicality] *
+    ALTITUDE_FACTORS[altitude] *
+    HEAT_FACTORS[heat];
 
-function fatigueFactor(referenceDistanceKm, targetDistanceKm){
-  if (!referenceDistanceKm || !targetDistanceKm) return 1;
-  return Math.pow(targetDistanceKm / referenceDistanceKm, FATIGUE_EXPONENT);
+  return Math.max(MIN_COMBINED_ADJUSTMENT, Math.min(MAX_COMBINED_ADJUSTMENT, factor));
 }
 
 function referenceTimeMinutes(){
@@ -502,6 +470,44 @@ function referenceTimeMinutes(){
 
   if (h === 0 && m === 0 && s === 0) return null;
   return h * 60 + m + s / 60;
+}
+
+function ultraDistancePenalty(referenceDistanceKm, targetDistanceKm, targetEffort){
+  if (!referenceDistanceKm || !targetDistanceKm) return 1;
+
+  const ratio = targetDistanceKm / referenceDistanceKm;
+
+  let penalty = Math.pow(ratio, 0.08);
+
+  if (ratio > 2){
+    penalty *= Math.pow(ratio / 2, 0.10);
+  }
+
+  if (ratio > 3){
+    penalty *= Math.pow(ratio / 3, 0.18);
+  }
+
+  if (ratio > 4){
+    penalty *= Math.pow(ratio / 4, 0.22);
+  }
+
+  if (targetDistanceKm >= 100){
+    penalty *= 1.03;
+  }
+
+  if (targetDistanceKm >= 140){
+    penalty *= 1.04;
+  }
+
+  if (targetDistanceKm >= 170){
+    penalty *= 1.05;
+  }
+
+  if (targetEffort >= 220){
+    penalty *= 1.03;
+  }
+
+  return penalty;
 }
 
 function setTargetTime(totalMinutes){
@@ -563,9 +569,13 @@ function estimateTime(){
   const targetCondition = combinedConditionFactor(targetTechnicality, targetAltitude, targetHeat);
 
   const normalizedReferencePace = refTime / (refEffort * refCondition);
-  const durationPenalty = fatigueFactor(refDistance, targetDistance);
+  const durationPenalty = ultraDistancePenalty(refDistance, targetDistance, targetEffort);
 
-  const estimatedMinutes = normalizedReferencePace * targetEffort * targetCondition * durationPenalty;
+  const estimatedMinutes =
+    normalizedReferencePace *
+    targetEffort *
+    targetCondition *
+    durationPenalty;
 
   setTargetTime(estimatedMinutes);
 }
@@ -590,41 +600,6 @@ function clearAll(){
   set("targetHeat", "low");
 
   currentSuccessFields = [];
-}
-
-function applyPreset(button){
-  const target = button.dataset.target;
-
-  if (target === "reference"){
-    set("refDistance", button.dataset.distance || "");
-    set("refElevation", button.dataset.elevation || "");
-    set("refTimeH", button.dataset.hours || "");
-    set("refTimeMin", button.dataset.minutes || "");
-    set("refTimeSec", button.dataset.seconds || "");
-    set("refTechnicality", button.dataset.technicality || "low");
-    set("refAltitude", button.dataset.altitude || "low");
-    set("refHeat", button.dataset.heat || "low");
-
-    highlight([
-      "refDistance", "refElevation", "refTimeH", "refTimeMin", "refTimeSec",
-      "refTechnicality", "refAltitude", "refHeat"
-    ]);
-  }
-
-  if (target === "target"){
-    set("targetDistance", button.dataset.distance || "");
-    set("targetElevation", button.dataset.elevation || "");
-    set("targetTechnicality", button.dataset.technicality || "low");
-    set("targetAltitude", button.dataset.altitude || "low");
-    set("targetHeat", button.dataset.heat || "low");
-
-    highlight([
-      "targetDistance", "targetElevation",
-      "targetTechnicality", "targetAltitude", "targetHeat"
-    ]);
-  }
-
-  clearAllSuccess();
 }
 
 function buildSummary(){
@@ -670,10 +645,6 @@ async function copySummary(){
 document.getElementById("btnEstimate").onclick = estimateTime;
 document.getElementById("btnCopySummary").onclick = copySummary;
 document.getElementById("clearAll").onclick = clearAll;
-
-document.querySelectorAll(".preset").forEach(button => {
-  button.addEventListener("click", () => applyPreset(button));
-});
 
 document.querySelectorAll("input, select").forEach(el => {
   el.addEventListener("input", handleManualEdit);
