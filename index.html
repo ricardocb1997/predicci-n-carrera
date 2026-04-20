@@ -19,6 +19,12 @@
 
       --success:#dcfce7;
       --success-border:#86efac;
+
+      --readonly-bg:#eef2f7;
+      --readonly-border:#cbd5e1;
+      --info-bg:#eff6ff;
+      --info-border:#bfdbfe;
+      --info-text:#1d4ed8;
     }
 
     *{box-sizing:border-box}
@@ -49,11 +55,11 @@
       font-size:1rem;
     }
 
-    p.helper{
+    .helper{
       margin:0 0 14px 0;
       color:var(--muted);
       font-size:0.9rem;
-      line-height:1.4;
+      line-height:1.45;
     }
 
     .grid-2{
@@ -62,15 +68,8 @@
       gap:12px;
     }
 
-    .calc-row{
-      display:grid;
-      grid-template-columns:1fr 1fr;
-      gap:12px;
-      margin-top:12px;
-    }
-
     @media (max-width: 900px){
-      .grid-2, .calc-row{grid-template-columns:1fr;}
+      .grid-2{grid-template-columns:1fr;}
     }
 
     .block{
@@ -121,16 +120,60 @@
       font:inherit;
     }
 
-    input.highlight, select.highlight{
-      background:var(--highlight);
-      border-color:var(--highlight-border);
-      box-shadow:0 0 0 3px rgba(147,197,253,0.25);
+    input[readonly]{
+      background:var(--readonly-bg);
+      color:#475569;
+      border:1px dashed var(--readonly-border);
+      font-weight:600;
     }
 
-    input.success, select.success{
-      background:var(--success);
-      border-color:var(--success-border);
-      box-shadow:0 0 0 3px rgba(134,239,172,0.25);
+    .result-input-wrap{
+      background:#f8fafc;
+      border:1px solid var(--readonly-border);
+      border-radius:10px;
+      padding:10px;
+      margin-bottom:10px;
+    }
+
+    .result-input-label{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:8px;
+      margin:0 0 6px 0;
+    }
+
+    .result-input-label .field-label{
+      margin:0;
+    }
+
+    .result-badge{
+      font-size:0.72rem;
+      font-weight:600;
+      color:var(--info-text);
+      background:var(--info-bg);
+      border:1px solid var(--info-border);
+      border-radius:999px;
+      padding:2px 8px;
+      white-space:nowrap;
+    }
+
+    .target-note{
+      margin:0 0 10px 0;
+      font-size:0.82rem;
+      color:var(--muted);
+      line-height:1.45;
+    }
+
+    .forecast-note{
+      margin:2px 0 10px 0;
+      font-size:0.82rem;
+      color:var(--muted);
+      line-height:1.45;
+      background:#fff;
+      border:1px solid var(--border);
+      border-radius:10px;
+      padding:10px;
     }
 
     .quick-buttons{
@@ -153,10 +196,22 @@
       background:#eef2f7;
     }
 
+    .target-actions{
+      margin-top:10px;
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:8px;
+    }
+
+    @media (max-width: 560px){
+      .target-actions{grid-template-columns:1fr;}
+    }
+
     .calc-btn{
       width:100%;
       border-radius:10px;
       font-weight:600;
+      padding:10px 12px;
     }
 
     .actions{
@@ -166,192 +221,192 @@
       flex-wrap:wrap;
     }
 
-    .status{
-      margin-top:12px;
-      font-size:0.9rem;
-      color:var(--text);
+    input.highlight, select.highlight{
+      background:var(--highlight);
+      border-color:var(--highlight-border);
+      box-shadow:0 0 0 3px rgba(147,197,253,0.25);
     }
 
-    .result-box{
-      margin-top:12px;
-      background:var(--soft);
-      border:1px solid var(--border);
-      border-radius:12px;
-      padding:12px;
-    }
-
-    .result-main{
-      font-size:1.15rem;
-      font-weight:700;
-      margin-bottom:8px;
-    }
-
-    .result-detail{
-      font-size:0.9rem;
-      color:var(--muted);
-      line-height:1.5;
-    }
-
-    .guide{
-      margin-top:14px;
-      font-size:0.88rem;
-      color:var(--muted);
-      line-height:1.5;
+    input.success, select.success{
+      background:var(--success);
+      border-color:var(--success-border);
+      box-shadow:0 0 0 3px rgba(134,239,172,0.25);
     }
   </style>
 </head>
 
 <body>
 <div class="wrap">
-<div class="card">
+  <div class="card">
 
-<h2>Estimador de tiempo en trail</h2>
-<p class="helper">Introduce una carrera de referencia y una carrera objetivo. El cálculo ajusta por distancia, desnivel, tecnicidad, altitud media y calor.</p>
+    <h2>Estimador de tiempo en trail</h2>
+    <p class="helper">
+      Introduce una carrera de referencia y una carrera objetivo. El cálculo ajusta por distancia,
+      desnivel, tecnicidad, altitud media y calor.
+    </p>
 
-<div class="grid-2">
+    <div class="grid-2">
 
-  <div class="block">
-    <div class="block-title">Carrera de referencia</div>
+      <div class="block">
+        <div class="block-title">Carrera de referencia</div>
 
-    <div class="subgrid-2">
-      <div>
-        <label class="field-label" for="refDistance">Distancia (km)</label>
-        <input id="refDistance" type="number" min="0" step="0.1">
+        <div class="subgrid-2">
+          <div>
+            <label class="field-label" for="refDistance">Distancia (km)</label>
+            <input id="refDistance" type="number" min="0" step="0.1">
+          </div>
+          <div>
+            <label class="field-label" for="refElevation">Desnivel positivo (m)</label>
+            <input id="refElevation" type="number" min="0" step="1">
+          </div>
+        </div>
+
+        <div class="subgrid-3">
+          <div>
+            <label class="field-label" for="refTimeH">Horas</label>
+            <input id="refTimeH" type="number" min="0" step="1">
+          </div>
+          <div>
+            <label class="field-label" for="refTimeMin">Minutos</label>
+            <input id="refTimeMin" type="number" min="0" step="1">
+          </div>
+          <div>
+            <label class="field-label" for="refTimeSec">Segundos</label>
+            <input id="refTimeSec" type="number" min="0" step="1">
+          </div>
+        </div>
+
+        <label class="field-label" for="refTechnicality">Tecnicidad</label>
+        <select id="refTechnicality">
+          <option value="low">Baja</option>
+          <option value="medium">Media</option>
+          <option value="high">Alta</option>
+          <option value="very_high">Muy alta</option>
+        </select>
+
+        <label class="field-label" for="refAltitude">Altitud media</label>
+        <select id="refAltitude">
+          <option value="low">0–1.000 m</option>
+          <option value="mid">1.000–2.000 m</option>
+          <option value="high">2.000–3.000 m</option>
+        </select>
+
+        <label class="field-label" for="refHeat">Calor</label>
+        <select id="refHeat">
+          <option value="low">Poco</option>
+          <option value="medium">Medio</option>
+          <option value="high">Alto</option>
+        </select>
+
+        <div class="quick-buttons">
+          <button class="preset"
+                  data-target="reference"
+                  data-distance="42"
+                  data-elevation="3800"
+                  data-hours="5"
+                  data-minutes="15"
+                  data-seconds="0"
+                  data-technicality="high"
+                  data-altitude="mid"
+                  data-heat="low">
+            Ejemplo 42 / 3800+
+          </button>
+        </div>
       </div>
-      <div>
-        <label class="field-label" for="refElevation">Desnivel positivo (m)</label>
-        <input id="refElevation" type="number" min="0" step="1">
+
+      <div class="block">
+        <div class="block-title">Carrera objetivo</div>
+
+        <div class="subgrid-2">
+          <div>
+            <label class="field-label" for="targetDistance">Distancia (km)</label>
+            <input id="targetDistance" type="number" min="0" step="0.1">
+          </div>
+          <div>
+            <label class="field-label" for="targetElevation">Desnivel positivo (m)</label>
+            <input id="targetElevation" type="number" min="0" step="1">
+          </div>
+        </div>
+
+        <div class="result-input-wrap">
+          <div class="result-input-label">
+            <label class="field-label" for="targetTimeH">Tiempo estimado</label>
+            <span class="result-badge">Resultado automático</span>
+          </div>
+
+          <div class="subgrid-3">
+            <div>
+              <label class="field-label" for="targetTimeH">Horas</label>
+              <input id="targetTimeH" type="number" min="0" step="1" readonly>
+            </div>
+            <div>
+              <label class="field-label" for="targetTimeMin">Minutos</label>
+              <input id="targetTimeMin" type="number" min="0" step="1" readonly>
+            </div>
+            <div>
+              <label class="field-label" for="targetTimeSec">Segundos</label>
+              <input id="targetTimeSec" type="number" min="0" step="1" readonly>
+            </div>
+          </div>
+
+          <div class="target-note">
+            Estos campos no se completan manualmente. Se rellenan automáticamente al pulsar
+            <strong>Estimar tiempo</strong>.
+          </div>
+        </div>
+
+        <div class="forecast-note">
+          En la carrera objetivo, la <strong>tecnicidad</strong> y el <strong>calor</strong> se introducen como
+          <strong>previsión</strong>, ya que la carrera todavía no se ha realizado.
+        </div>
+
+        <label class="field-label" for="targetTechnicality">Tecnicidad prevista</label>
+        <select id="targetTechnicality">
+          <option value="low">Baja</option>
+          <option value="medium">Media</option>
+          <option value="high">Alta</option>
+          <option value="very_high">Muy alta</option>
+        </select>
+
+        <label class="field-label" for="targetAltitude">Altitud media</label>
+        <select id="targetAltitude">
+          <option value="low">0–1.000 m</option>
+          <option value="mid">1.000–2.000 m</option>
+          <option value="high">2.000–3.000 m</option>
+        </select>
+
+        <label class="field-label" for="targetHeat">Calor previsto</label>
+        <select id="targetHeat">
+          <option value="low">Poco</option>
+          <option value="medium">Medio</option>
+          <option value="high">Alto</option>
+        </select>
+
+        <div class="quick-buttons">
+          <button class="preset"
+                  data-target="target"
+                  data-distance="60"
+                  data-elevation="3000"
+                  data-technicality="low"
+                  data-altitude="mid"
+                  data-heat="low">
+            Ejemplo 60 / 3000+
+          </button>
+        </div>
+
+        <div class="target-actions">
+          <button class="calc-btn" id="btnEstimate">Estimar tiempo</button>
+          <button class="calc-btn" id="btnCopySummary">Copiar resumen</button>
+        </div>
       </div>
+
     </div>
 
-    <div class="subgrid-3">
-      <div>
-        <label class="field-label" for="refTimeH">Horas</label>
-        <input id="refTimeH" type="number" min="0" step="1">
-      </div>
-      <div>
-        <label class="field-label" for="refTimeMin">Minutos</label>
-        <input id="refTimeMin" type="number" min="0" step="1">
-      </div>
-      <div>
-        <label class="field-label" for="refTimeSec">Segundos</label>
-        <input id="refTimeSec" type="number" min="0" step="1">
-      </div>
+    <div class="actions">
+      <button id="clearAll">Borrar todo</button>
     </div>
 
-    <label class="field-label" for="refTechnicality">Tecnicidad</label>
-    <select id="refTechnicality">
-      <option value="low">Baja</option>
-      <option value="medium">Media</option>
-      <option value="high">Alta</option>
-      <option value="very_high">Muy alta</option>
-    </select>
-
-    <label class="field-label" for="refAltitude">Altitud media</label>
-    <select id="refAltitude">
-      <option value="low">0–1.000 m</option>
-      <option value="mid">1.000–2.000 m</option>
-      <option value="high">2.000–3.000 m</option>
-    </select>
-
-    <label class="field-label" for="refHeat">Calor</label>
-    <select id="refHeat">
-      <option value="low">Poco</option>
-      <option value="medium">Medio</option>
-      <option value="high">Alto</option>
-    </select>
-
-    <div class="quick-buttons">
-      <button class="preset" data-target="reference" data-distance="42" data-elevation="3800" data-hours="5" data-minutes="15" data-seconds="0" data-technicality="high" data-altitude="mid" data-heat="low">Ejemplo 42 / 3800+</button>
-    </div>
   </div>
-
-  <div class="block">
-    <div class="block-title">Carrera objetivo</div>
-
-    <div class="subgrid-2">
-      <div>
-        <label class="field-label" for="targetDistance">Distancia (km)</label>
-        <input id="targetDistance" type="number" min="0" step="0.1">
-      </div>
-      <div>
-        <label class="field-label" for="targetElevation">Desnivel positivo (m)</label>
-        <input id="targetElevation" type="number" min="0" step="1">
-      </div>
-    </div>
-
-    <div class="subgrid-3">
-      <div>
-        <label class="field-label" for="targetTimeH">Horas estimadas</label>
-        <input id="targetTimeH" type="number" min="0" step="1" readonly>
-      </div>
-      <div>
-        <label class="field-label" for="targetTimeMin">Minutos</label>
-        <input id="targetTimeMin" type="number" min="0" step="1" readonly>
-      </div>
-      <div>
-        <label class="field-label" for="targetTimeSec">Segundos</label>
-        <input id="targetTimeSec" type="number" min="0" step="1" readonly>
-      </div>
-    </div>
-
-    <label class="field-label" for="targetTechnicality">Tecnicidad</label>
-    <select id="targetTechnicality">
-      <option value="low">Baja</option>
-      <option value="medium">Media</option>
-      <option value="high">Alta</option>
-      <option value="very_high">Muy alta</option>
-    </select>
-
-    <label class="field-label" for="targetAltitude">Altitud media</label>
-    <select id="targetAltitude">
-      <option value="low">0–1.000 m</option>
-      <option value="mid">1.000–2.000 m</option>
-      <option value="high">2.000–3.000 m</option>
-    </select>
-
-    <label class="field-label" for="targetHeat">Calor</label>
-    <select id="targetHeat">
-      <option value="low">Poco</option>
-      <option value="medium">Medio</option>
-      <option value="high">Alto</option>
-    </select>
-
-    <div class="quick-buttons">
-      <button class="preset" data-target="target" data-distance="60" data-elevation="3000" data-technicality="low" data-altitude="mid" data-heat="low">Ejemplo 60 / 3000+</button>
-    </div>
-  </div>
-
-</div>
-
-<div class="calc-row">
-  <button class="calc-btn" id="btnEstimate">Estimar tiempo</button>
-  <button class="calc-btn" id="btnCopySummary">Copiar resumen</button>
-</div>
-
-<div class="actions">
-  <button id="clearAll">Borrar todo</button>
-</div>
-
-<div class="result-box">
-  <div class="result-main" id="resultMain">Tiempo estimado: —</div>
-  <div class="result-detail" id="resultDetail">Completa los datos y pulsa “Estimar tiempo”.</div>
-</div>
-
-<div class="guide">
-  <strong>Guía rápida:</strong><br>
-  Tecnicidad baja = terreno muy corrible.<br>
-  Tecnicidad media = sendero de montaña normal.<br>
-  Tecnicidad alta = terreno roto que frena bastante.<br>
-  Tecnicidad muy alta = terreno muy técnico.<br><br>
-  Calor poco = fresco o templado.<br>
-  Calor medio = calor moderado.<br>
-  Calor alto = calor claro y penalizante, o mucha exposición/humedad.
-</div>
-
-<div class="status" id="status">Pulsa el botón para calcular</div>
-
-</div>
 </div>
 
 <script>
@@ -426,10 +481,6 @@ function handleManualEdit(){
   clearAllSuccess();
 }
 
-function msg(t){
-  document.getElementById("status").innerText = t;
-}
-
 function kmEffort(distanceKm, elevationM){
   return distanceKm + (elevationM / VERTICAL_EQUIVALENCE);
 }
@@ -448,6 +499,7 @@ function referenceTimeMinutes(){
   const h = v("refTimeH") || 0;
   const m = v("refTimeMin") || 0;
   const s = v("refTimeSec") || 0;
+
   if (h === 0 && m === 0 && s === 0) return null;
   return h * 60 + m + s / 60;
 }
@@ -464,14 +516,6 @@ function setTargetTime(totalMinutes){
   setSuccess(["targetTimeH", "targetTimeMin", "targetTimeSec"]);
 }
 
-function formatDuration(totalMinutes){
-  const totalSeconds = Math.round(totalMinutes * 60);
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
-  return `${hours}h ${String(minutes).padStart(2, "0")}min ${String(seconds).padStart(2, "0")}s`;
-}
-
 function estimateTime(){
   const refDistance = v("refDistance");
   const refElevation = v("refElevation");
@@ -481,31 +525,26 @@ function estimateTime(){
 
   if (!refDistance || refDistance <= 0){
     highlight(["refDistance"]);
-    msg("Introduce una distancia válida en la carrera de referencia");
     return;
   }
 
   if (refElevation == null || refElevation < 0){
     highlight(["refElevation"]);
-    msg("Introduce un desnivel válido en la carrera de referencia");
     return;
   }
 
   if (!refTime || refTime <= 0){
     highlight(["refTimeH", "refTimeMin", "refTimeSec"]);
-    msg("Introduce un tiempo válido en la carrera de referencia");
     return;
   }
 
   if (!targetDistance || targetDistance <= 0){
     highlight(["targetDistance"]);
-    msg("Introduce una distancia válida en la carrera objetivo");
     return;
   }
 
   if (targetElevation == null || targetElevation < 0){
     highlight(["targetElevation"]);
-    msg("Introduce un desnivel válido en la carrera objetivo");
     return;
   }
 
@@ -529,17 +568,6 @@ function estimateTime(){
   const estimatedMinutes = normalizedReferencePace * targetEffort * targetCondition * durationPenalty;
 
   setTargetTime(estimatedMinutes);
-
-  document.getElementById("resultMain").innerText = `Tiempo estimado: ${formatDuration(estimatedMinutes)}`;
-  document.getElementById("resultDetail").innerHTML = `
-    Esfuerzo referencia: <strong>${refEffort.toFixed(2)}</strong> km-esfuerzo.<br>
-    Esfuerzo objetivo: <strong>${targetEffort.toFixed(2)}</strong> km-esfuerzo.<br>
-    Factor condiciones referencia: <strong>${refCondition.toFixed(3)}</strong>.<br>
-    Factor condiciones objetivo: <strong>${targetCondition.toFixed(3)}</strong>.<br>
-    Penalización por duración: <strong>${durationPenalty.toFixed(3)}</strong>.
-  `;
-
-  msg("Tiempo estimado correctamente");
 }
 
 function clearAll(){
@@ -562,9 +590,6 @@ function clearAll(){
   set("targetHeat", "low");
 
   currentSuccessFields = [];
-  document.getElementById("resultMain").innerText = "Tiempo estimado: —";
-  document.getElementById("resultDetail").innerText = "Completa los datos y pulsa “Estimar tiempo”.";
-  msg("Todo borrado");
 }
 
 function applyPreset(button){
@@ -579,8 +604,11 @@ function applyPreset(button){
     set("refTechnicality", button.dataset.technicality || "low");
     set("refAltitude", button.dataset.altitude || "low");
     set("refHeat", button.dataset.heat || "low");
-    highlight(["refDistance", "refElevation", "refTimeH", "refTimeMin", "refTimeSec", "refTechnicality", "refAltitude", "refHeat"]);
-    msg("Carrera de referencia actualizada");
+
+    highlight([
+      "refDistance", "refElevation", "refTimeH", "refTimeMin", "refTimeSec",
+      "refTechnicality", "refAltitude", "refHeat"
+    ]);
   }
 
   if (target === "target"){
@@ -589,17 +617,22 @@ function applyPreset(button){
     set("targetTechnicality", button.dataset.technicality || "low");
     set("targetAltitude", button.dataset.altitude || "low");
     set("targetHeat", button.dataset.heat || "low");
-    highlight(["targetDistance", "targetElevation", "targetTechnicality", "targetAltitude", "targetHeat"]);
-    msg("Carrera objetivo actualizada");
+
+    highlight([
+      "targetDistance", "targetElevation",
+      "targetTechnicality", "targetAltitude", "targetHeat"
+    ]);
   }
 
   clearAllSuccess();
 }
 
 function buildSummary(){
-  const result = document.getElementById("resultMain").innerText;
-  if (result.includes("—")){
-    msg("Primero calcula una estimación");
+  const timeH = v("targetTimeH");
+  const timeMin = v("targetTimeMin");
+  const timeSec = v("targetTimeSec");
+
+  if (timeH == null && timeMin == null && timeSec == null){
     return null;
   }
 
@@ -615,11 +648,11 @@ function buildSummary(){
     "Carrera objetivo:",
     `- Distancia: ${v("targetDistance") || 0} km`,
     `- Desnivel: ${v("targetElevation") || 0} m+`,
-    `- Tecnicidad: ${document.getElementById("targetTechnicality").options[document.getElementById("targetTechnicality").selectedIndex].text}`,
+    `- Tecnicidad prevista: ${document.getElementById("targetTechnicality").options[document.getElementById("targetTechnicality").selectedIndex].text}`,
     `- Altitud: ${document.getElementById("targetAltitude").options[document.getElementById("targetAltitude").selectedIndex].text}`,
-    `- Calor: ${document.getElementById("targetHeat").options[document.getElementById("targetHeat").selectedIndex].text}`,
+    `- Calor previsto: ${document.getElementById("targetHeat").options[document.getElementById("targetHeat").selectedIndex].text}`,
     "",
-    result
+    `Tiempo estimado: ${(v("targetTimeH") || 0)}h ${(v("targetTimeMin") || 0)}min ${(v("targetTimeSec") || 0)}s`
   ].join("\n");
 }
 
@@ -627,17 +660,16 @@ async function copySummary(){
   const summary = buildSummary();
   if (!summary) return;
 
-  try {
+  try{
     await navigator.clipboard.writeText(summary);
-    msg("Resumen copiado al portapapeles");
-  } catch (e) {
-    msg("No se pudo copiar el resumen");
+  }catch(e){
+    console.error("No se pudo copiar el resumen");
   }
 }
 
 document.getElementById("btnEstimate").onclick = estimateTime;
-document.getElementById("clearAll").onclick = clearAll;
 document.getElementById("btnCopySummary").onclick = copySummary;
+document.getElementById("clearAll").onclick = clearAll;
 
 document.querySelectorAll(".preset").forEach(button => {
   button.addEventListener("click", () => applyPreset(button));
