@@ -1,0 +1,275 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+from enum import Enum
+from typing import Dict
+
+
+class TerrainTechnicality(str, Enum):
+    LOW = "poca"
+    MEDIUM = "media"
+    HIGH = "mucha"
+    VERY_HIGH = "muy_alta"
+
+
+class AltitudeBand(str, Enum):
+    LOW = "0_1000"
+    MID = "1000_2000"
+    HIGH = "2000_3000"
+
+
+class HeatLevel(str, Enum):
+    LOW = "poco"
+    MEDIUM = "medio"
+    HIGH = "alto"
+
+
+@dataclass(frozen=True)
+class RaceProfile:
+    distance_km: float
+    elevation_gain_m: float
+    time_minutes: float | None = None
+    technicality: TerrainTechnicality = TerrainTechnicality.MEDIUM
+    altitude: AltitudeBand = AltitudeBand.LOW
+    heat: HeatLevel = HeatLevel.LOW
+
+
+class ValidationError(ValueError):
+    """Raised when race inputs are invalid."""
+
+
+TECHNICALITY_FACTORS: Dict[TerrainTechnicality, float] = {
+    TerrainTechnicality.LOW: 1.00,
+    TerrainTechnicality.MEDIUM: 1.08,
+    TerrainTechnicality.HIGH: 1.18,
+    TerrainTechnicality.VERY_HIGH: 1.30,
+}
+
+ALTITUDE_FACTORS: Dict[AltitudeBand, float] = {
+    AltitudeBand.LOW: 1.00,
+    AltitudeBand.MID: 1.04,
+    AltitudeBand.HIGH: 1.09,
+}
+
+HEAT_FACTORS: Dict[HeatLevel, float] = {
+    HeatLevel.LOW: 1.00,
+    HeatLevel.MEDIUM: 1.04,
+    HeatLevel.HIGH: 1.09,
+}
+
+
+# Base equivalence used to convert vertical gain into horizontal effort.
+# Example: 100 m D+ = 1 km-effort.
+VERTICAL_EQUIVALENCE_M_PER_KM = 100.0
+
+
+# Fatigue correction for longer races.
+# Once the target race is longer than the reference race, the model adds a small
+# penalty because holding the exact same efficiency is harder as duration grows.
+FATIGUE_EXPONENT = 0.06
+
+
+# Calibration limits so environmental/terrain factors do not dominate too much.
+MIN_COMBINED_ADJUSTMENT = 0.85
+MAX_COMBINED_ADJUSTMENT = 1.20
+
+
+HEAT_GUIDE = {
+    HeatLevel.LOW: "fresco o templado; normalmente < 15-18 °C en carrera",
+    HeatLevel.MEDIUM: "calor moderado; aproximadamente 18-25 °C",
+    HeatLevel.HIGH: "calor alto; normalmente > 25 °C o mucha exposición solar/humedad",
+}
+
+
+TECHNICALITY_GUIDE = {
+    TerrainTechnicality.LOW: "pistas, senderos limpios, terreno muy corrible",
+    TerrainTechnicality.MEDIUM: "sendero normal de montaña, alguna piedra, ritmo bastante estable",
+    TerrainTechnicality.HIGH: "tramos rotos, piedra, pendiente incómoda, bajadas que frenan",
+    TerrainTechnicality.VERY_HIGH: "terreno muy técnico, bloques, crestas, mucho freno en subida/bajada",
+}
+
+
+ALTITUDE_GUIDE = {
+    AltitudeBand.LOW: "altitud media entre 0 y 1.000 m",
+    AltitudeBand.MID: "altitud media entre 1.000 y 2.000 m",
+    AltitudeBand.HIGH: "altitud media entre 2.000 y 3.000 m",
+}
+
+
+def validate_race_profile(race: RaceProfile, require_time: bool) -> None:
+    if race.distance_km <= 0:
+        raise ValidationError("La distancia debe ser mayor que 0 km.")
+    if race.elevation_gain_m < 0:
+        raise ValidationError("El desnivel positivo no puede ser negativo.")
+    if require_time and race.time_minutes is None:
+        raise ValidationError("La carrera de referencia debe incluir un tiempo.")
+    if race.time_minutes is not None and race.time_minutes <= 0:
+        raise ValidationError("El tiempo debe ser mayor que 0 minutos.")
+
+
+
+def km_effort(distance_km: float, elevation_gain_m: float) -> float:
+    return distance_km + (elevation_gain_m / VERTICAL_EQUIVALENCE_M_PER_KM)
+
+
+
+def condition_factor(
+    technicality: TerrainTechnicality,
+    altitude: AltitudeBand,
+    heat: HeatLevel,
+) -> float:
+    factor = (
+        TECHNICALITY_FACTORS[technicality]
+        * ALTITUDE_FACTORS[altitude]
+        * HEAT_FACTORS[heat]
+    )
+    return max(MIN_COMBINED_ADJUSTMENT, min(MAX_COMBINED_ADJUSTMENT, factor))
+
+
+
+def fatigue_factor(reference_distance_km: float, target_distance_km: float) -> float:
+    if target_distance_km <= 0 or reference_distance_km <= 0:
+        return 1.0
+    ratio = target_distance_km / reference_distance_km
+    return ratio ** FATIGUE_EXPONENT
+
+
+
+def estimate_target_time(reference: RaceProfile, target: RaceProfile) -> Dict[str, float]:
+    validate_race_profile(reference, require_time=True)
+    validate_race_profile(target, require_time=False)
+
+    reference_effort = km_effort(reference.distance_km, reference.elevation_gain_m)
+    target_effort = km_effort(target.distance_km, target.elevation_gain_m)
+
+    reference_condition = condition_factor(
+        reference.technicality,
+        reference.altitude,
+        reference.heat,
+    )
+    target_condition = condition_factor(
+        target.technicality,
+        target.altitude,
+        target.heat,
+    )
+
+    # Normalize the reference performance by how hard the reference conditions were,
+    # then apply the target conditions.
+    normalized_reference_pace = reference.time_minutes / (reference_effort * reference_condition)
+
+    duration_penalty = fatigue_factor(reference.distance_km, target.distance_km)
+
+    estimated_minutes = (
+        normalized_reference_pace
+        * target_effort
+        * target_condition
+        * duration_penalty
+    )
+
+    return {
+        "reference_effort_km": reference_effort,
+        "target_effort_km": target_effort,
+        "reference_condition_factor": reference_condition,
+        "target_condition_factor": target_condition,
+        "duration_penalty_factor": duration_penalty,
+        "estimated_minutes": estimated_minutes,
+    }
+
+
+
+def format_minutes(total_minutes: float) -> str:
+    rounded = int(round(total_minutes))
+    hours = rounded // 60
+    minutes = rounded % 60
+    return f"{hours}h {minutes:02d}min"
+
+
+
+def print_guides() -> None:
+    print("\nGuía de categorías:\n")
+
+    print("Tecnicidad:")
+    for key, value in TECHNICALITY_GUIDE.items():
+        print(f"  - {key.value}: {value}")
+
+    print("\nAltitud:")
+    for key, value in ALTITUDE_GUIDE.items():
+        print(f"  - {key.value}: {value}")
+
+    print("\nCalor:")
+    for key, value in HEAT_GUIDE.items():
+        print(f"  - {key.value}: {value}")
+
+
+
+def ask_float(prompt: str) -> float:
+    while True:
+        raw = input(prompt).strip().replace(",", ".")
+        try:
+            return float(raw)
+        except ValueError:
+            print("Valor no válido. Introduce un número.")
+
+
+
+def ask_enum(prompt: str, enum_cls: type[Enum]) -> Enum:
+    valid_values = [item.value for item in enum_cls]
+    while True:
+        raw = input(f"{prompt} {valid_values}: ").strip().lower()
+        try:
+            return enum_cls(raw)
+        except ValueError:
+            print("Opción no válida. Elige una de las opciones mostradas.")
+
+
+
+def ask_race_profile(name: str, require_time: bool) -> RaceProfile:
+    print(f"\n--- {name} ---")
+    distance_km = ask_float("Distancia (km): ")
+    elevation_gain_m = ask_float("Desnivel positivo (m): ")
+    time_minutes = None
+    if require_time:
+        hours = ask_float("Horas: ")
+        minutes = ask_float("Minutos adicionales: ")
+        time_minutes = hours * 60 + minutes
+
+    technicality = ask_enum("Tecnicidad", TerrainTechnicality)
+    altitude = ask_enum("Altitud media", AltitudeBand)
+    heat = ask_enum("Calor", HeatLevel)
+
+    return RaceProfile(
+        distance_km=distance_km,
+        elevation_gain_m=elevation_gain_m,
+        time_minutes=time_minutes,
+        technicality=technicality,
+        altitude=altitude,
+        heat=heat,
+    )
+
+
+
+def main() -> None:
+    print("Estimador de tiempo para carreras de trail")
+    print("Usa una carrera de referencia para estimar el tiempo en una carrera objetivo.")
+    print_guides()
+
+    reference = ask_race_profile("Carrera de referencia", require_time=True)
+    target = ask_race_profile("Carrera objetivo", require_time=False)
+
+    try:
+        result = estimate_target_time(reference, target)
+    except ValidationError as exc:
+        print(f"\nError: {exc}")
+        return
+
+    print("\n--- Resultado ---")
+    print(f"Esfuerzo carrera referencia: {result['reference_effort_km']:.2f} km-esfuerzo")
+    print(f"Esfuerzo carrera objetivo:  {result['target_effort_km']:.2f} km-esfuerzo")
+    print(f"Factor condiciones referencia: {result['reference_condition_factor']:.3f}")
+    print(f"Factor condiciones objetivo:   {result['target_condition_factor']:.3f}")
+    print(f"Factor de fatiga por duración: {result['duration_penalty_factor']:.3f}")
+    print(f"\nTiempo estimado: {format_minutes(result['estimated_minutes'])}")
+
+
+if __name__ == "__main__":
+    main()
