@@ -1,275 +1,652 @@
-from __future__ import annotations
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Estimador de tiempo en trail</title>
 
-from dataclasses import dataclass
-from enum import Enum
-from typing import Dict
+  <style>
+    :root{
+      --bg:#f5f7fa;
+      --card:#ffffff;
+      --text:#1f2933;
+      --muted:#6b7280;
+      --border:#e5e7eb;
+      --soft:#f9fafb;
 
+      --highlight:#dbeafe;
+      --highlight-border:#93c5fd;
 
-class TerrainTechnicality(str, Enum):
-    LOW = "poca"
-    MEDIUM = "media"
-    HIGH = "mucha"
-    VERY_HIGH = "muy_alta"
-
-
-class AltitudeBand(str, Enum):
-    LOW = "0_1000"
-    MID = "1000_2000"
-    HIGH = "2000_3000"
-
-
-class HeatLevel(str, Enum):
-    LOW = "poco"
-    MEDIUM = "medio"
-    HIGH = "alto"
-
-
-@dataclass(frozen=True)
-class RaceProfile:
-    distance_km: float
-    elevation_gain_m: float
-    time_minutes: float | None = None
-    technicality: TerrainTechnicality = TerrainTechnicality.MEDIUM
-    altitude: AltitudeBand = AltitudeBand.LOW
-    heat: HeatLevel = HeatLevel.LOW
-
-
-class ValidationError(ValueError):
-    """Raised when race inputs are invalid."""
-
-
-TECHNICALITY_FACTORS: Dict[TerrainTechnicality, float] = {
-    TerrainTechnicality.LOW: 1.00,
-    TerrainTechnicality.MEDIUM: 1.08,
-    TerrainTechnicality.HIGH: 1.18,
-    TerrainTechnicality.VERY_HIGH: 1.30,
-}
-
-ALTITUDE_FACTORS: Dict[AltitudeBand, float] = {
-    AltitudeBand.LOW: 1.00,
-    AltitudeBand.MID: 1.04,
-    AltitudeBand.HIGH: 1.09,
-}
-
-HEAT_FACTORS: Dict[HeatLevel, float] = {
-    HeatLevel.LOW: 1.00,
-    HeatLevel.MEDIUM: 1.04,
-    HeatLevel.HIGH: 1.09,
-}
-
-
-# Base equivalence used to convert vertical gain into horizontal effort.
-# Example: 100 m D+ = 1 km-effort.
-VERTICAL_EQUIVALENCE_M_PER_KM = 100.0
-
-
-# Fatigue correction for longer races.
-# Once the target race is longer than the reference race, the model adds a small
-# penalty because holding the exact same efficiency is harder as duration grows.
-FATIGUE_EXPONENT = 0.06
-
-
-# Calibration limits so environmental/terrain factors do not dominate too much.
-MIN_COMBINED_ADJUSTMENT = 0.85
-MAX_COMBINED_ADJUSTMENT = 1.20
-
-
-HEAT_GUIDE = {
-    HeatLevel.LOW: "fresco o templado; normalmente < 15-18 °C en carrera",
-    HeatLevel.MEDIUM: "calor moderado; aproximadamente 18-25 °C",
-    HeatLevel.HIGH: "calor alto; normalmente > 25 °C o mucha exposición solar/humedad",
-}
-
-
-TECHNICALITY_GUIDE = {
-    TerrainTechnicality.LOW: "pistas, senderos limpios, terreno muy corrible",
-    TerrainTechnicality.MEDIUM: "sendero normal de montaña, alguna piedra, ritmo bastante estable",
-    TerrainTechnicality.HIGH: "tramos rotos, piedra, pendiente incómoda, bajadas que frenan",
-    TerrainTechnicality.VERY_HIGH: "terreno muy técnico, bloques, crestas, mucho freno en subida/bajada",
-}
-
-
-ALTITUDE_GUIDE = {
-    AltitudeBand.LOW: "altitud media entre 0 y 1.000 m",
-    AltitudeBand.MID: "altitud media entre 1.000 y 2.000 m",
-    AltitudeBand.HIGH: "altitud media entre 2.000 y 3.000 m",
-}
-
-
-def validate_race_profile(race: RaceProfile, require_time: bool) -> None:
-    if race.distance_km <= 0:
-        raise ValidationError("La distancia debe ser mayor que 0 km.")
-    if race.elevation_gain_m < 0:
-        raise ValidationError("El desnivel positivo no puede ser negativo.")
-    if require_time and race.time_minutes is None:
-        raise ValidationError("La carrera de referencia debe incluir un tiempo.")
-    if race.time_minutes is not None and race.time_minutes <= 0:
-        raise ValidationError("El tiempo debe ser mayor que 0 minutos.")
-
-
-
-def km_effort(distance_km: float, elevation_gain_m: float) -> float:
-    return distance_km + (elevation_gain_m / VERTICAL_EQUIVALENCE_M_PER_KM)
-
-
-
-def condition_factor(
-    technicality: TerrainTechnicality,
-    altitude: AltitudeBand,
-    heat: HeatLevel,
-) -> float:
-    factor = (
-        TECHNICALITY_FACTORS[technicality]
-        * ALTITUDE_FACTORS[altitude]
-        * HEAT_FACTORS[heat]
-    )
-    return max(MIN_COMBINED_ADJUSTMENT, min(MAX_COMBINED_ADJUSTMENT, factor))
-
-
-
-def fatigue_factor(reference_distance_km: float, target_distance_km: float) -> float:
-    if target_distance_km <= 0 or reference_distance_km <= 0:
-        return 1.0
-    ratio = target_distance_km / reference_distance_km
-    return ratio ** FATIGUE_EXPONENT
-
-
-
-def estimate_target_time(reference: RaceProfile, target: RaceProfile) -> Dict[str, float]:
-    validate_race_profile(reference, require_time=True)
-    validate_race_profile(target, require_time=False)
-
-    reference_effort = km_effort(reference.distance_km, reference.elevation_gain_m)
-    target_effort = km_effort(target.distance_km, target.elevation_gain_m)
-
-    reference_condition = condition_factor(
-        reference.technicality,
-        reference.altitude,
-        reference.heat,
-    )
-    target_condition = condition_factor(
-        target.technicality,
-        target.altitude,
-        target.heat,
-    )
-
-    # Normalize the reference performance by how hard the reference conditions were,
-    # then apply the target conditions.
-    normalized_reference_pace = reference.time_minutes / (reference_effort * reference_condition)
-
-    duration_penalty = fatigue_factor(reference.distance_km, target.distance_km)
-
-    estimated_minutes = (
-        normalized_reference_pace
-        * target_effort
-        * target_condition
-        * duration_penalty
-    )
-
-    return {
-        "reference_effort_km": reference_effort,
-        "target_effort_km": target_effort,
-        "reference_condition_factor": reference_condition,
-        "target_condition_factor": target_condition,
-        "duration_penalty_factor": duration_penalty,
-        "estimated_minutes": estimated_minutes,
+      --success:#dcfce7;
+      --success-border:#86efac;
     }
 
+    *{box-sizing:border-box}
 
+    body{
+      margin:0;
+      background:var(--bg);
+      font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+      color:var(--text);
+    }
 
-def format_minutes(total_minutes: float) -> str:
-    rounded = int(round(total_minutes))
-    hours = rounded // 60
-    minutes = rounded % 60
-    return f"{hours}h {minutes:02d}min"
+    .wrap{
+      max-width:1100px;
+      margin:20px auto;
+      padding:10px;
+    }
 
+    .card{
+      background:var(--card);
+      border:1px solid var(--border);
+      border-radius:14px;
+      padding:18px;
+      box-shadow:0 4px 14px rgba(15,23,42,0.04);
+    }
 
+    h2{
+      margin:0 0 12px 0;
+      font-size:1rem;
+    }
 
-def print_guides() -> None:
-    print("\nGuía de categorías:\n")
+    p.helper{
+      margin:0 0 14px 0;
+      color:var(--muted);
+      font-size:0.9rem;
+      line-height:1.4;
+    }
 
-    print("Tecnicidad:")
-    for key, value in TECHNICALITY_GUIDE.items():
-        print(f"  - {key.value}: {value}")
+    .grid-2{
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:12px;
+    }
 
-    print("\nAltitud:")
-    for key, value in ALTITUDE_GUIDE.items():
-        print(f"  - {key.value}: {value}")
+    .calc-row{
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:12px;
+      margin-top:12px;
+    }
 
-    print("\nCalor:")
-    for key, value in HEAT_GUIDE.items():
-        print(f"  - {key.value}: {value}")
+    @media (max-width: 900px){
+      .grid-2, .calc-row{grid-template-columns:1fr;}
+    }
 
+    .block{
+      background:var(--soft);
+      border:1px solid var(--border);
+      border-radius:12px;
+      padding:12px;
+    }
 
+    .block-title{
+      font-size:0.95rem;
+      font-weight:600;
+      margin-bottom:10px;
+    }
 
-def ask_float(prompt: str) -> float:
-    while True:
-        raw = input(prompt).strip().replace(",", ".")
-        try:
-            return float(raw)
-        except ValueError:
-            print("Valor no válido. Introduce un número.")
+    .field-label{
+      display:block;
+      font-size:0.82rem;
+      color:var(--muted);
+      margin:0 0 4px 0;
+    }
 
+    .subgrid-2{
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:8px;
+    }
 
+    .subgrid-3{
+      display:grid;
+      grid-template-columns:1fr 1fr 1fr;
+      gap:8px;
+    }
 
-def ask_enum(prompt: str, enum_cls: type[Enum]) -> Enum:
-    valid_values = [item.value for item in enum_cls]
-    while True:
-        raw = input(f"{prompt} {valid_values}: ").strip().lower()
-        try:
-            return enum_cls(raw)
-        except ValueError:
-            print("Opción no válida. Elige una de las opciones mostradas.")
+    @media (max-width: 560px){
+      .subgrid-2,.subgrid-3{grid-template-columns:1fr;}
+    }
 
+    input, select{
+      width:100%;
+      padding:8px;
+      border:1px solid var(--border);
+      border-radius:8px;
+      margin-bottom:8px;
+      transition:.2s;
+      background:#fff;
+      color:var(--text);
+      font:inherit;
+    }
 
+    input.highlight, select.highlight{
+      background:var(--highlight);
+      border-color:var(--highlight-border);
+      box-shadow:0 0 0 3px rgba(147,197,253,0.25);
+    }
 
-def ask_race_profile(name: str, require_time: bool) -> RaceProfile:
-    print(f"\n--- {name} ---")
-    distance_km = ask_float("Distancia (km): ")
-    elevation_gain_m = ask_float("Desnivel positivo (m): ")
-    time_minutes = None
-    if require_time:
-        hours = ask_float("Horas: ")
-        minutes = ask_float("Minutos adicionales: ")
-        time_minutes = hours * 60 + minutes
+    input.success, select.success{
+      background:var(--success);
+      border-color:var(--success-border);
+      box-shadow:0 0 0 3px rgba(134,239,172,0.25);
+    }
 
-    technicality = ask_enum("Tecnicidad", TerrainTechnicality)
-    altitude = ask_enum("Altitud media", AltitudeBand)
-    heat = ask_enum("Calor", HeatLevel)
+    .quick-buttons{
+      display:flex;
+      gap:6px;
+      flex-wrap:wrap;
+      margin-bottom:8px;
+    }
 
-    return RaceProfile(
-        distance_km=distance_km,
-        elevation_gain_m=elevation_gain_m,
-        time_minutes=time_minutes,
-        technicality=technicality,
-        altitude=altitude,
-        heat=heat,
-    )
+    button{
+      border:1px solid var(--border);
+      background:#fff;
+      border-radius:999px;
+      padding:6px 10px;
+      cursor:pointer;
+      font-size:0.84rem;
+    }
 
+    button:hover{
+      background:#eef2f7;
+    }
 
+    .calc-btn{
+      width:100%;
+      border-radius:10px;
+      font-weight:600;
+    }
 
-def main() -> None:
-    print("Estimador de tiempo para carreras de trail")
-    print("Usa una carrera de referencia para estimar el tiempo en una carrera objetivo.")
-    print_guides()
+    .actions{
+      margin-top:12px;
+      display:flex;
+      gap:8px;
+      flex-wrap:wrap;
+    }
 
-    reference = ask_race_profile("Carrera de referencia", require_time=True)
-    target = ask_race_profile("Carrera objetivo", require_time=False)
+    .status{
+      margin-top:12px;
+      font-size:0.9rem;
+      color:var(--text);
+    }
 
-    try:
-        result = estimate_target_time(reference, target)
-    except ValidationError as exc:
-        print(f"\nError: {exc}")
-        return
+    .result-box{
+      margin-top:12px;
+      background:var(--soft);
+      border:1px solid var(--border);
+      border-radius:12px;
+      padding:12px;
+    }
 
-    print("\n--- Resultado ---")
-    print(f"Esfuerzo carrera referencia: {result['reference_effort_km']:.2f} km-esfuerzo")
-    print(f"Esfuerzo carrera objetivo:  {result['target_effort_km']:.2f} km-esfuerzo")
-    print(f"Factor condiciones referencia: {result['reference_condition_factor']:.3f}")
-    print(f"Factor condiciones objetivo:   {result['target_condition_factor']:.3f}")
-    print(f"Factor de fatiga por duración: {result['duration_penalty_factor']:.3f}")
-    print(f"\nTiempo estimado: {format_minutes(result['estimated_minutes'])}")
+    .result-main{
+      font-size:1.15rem;
+      font-weight:700;
+      margin-bottom:8px;
+    }
 
+    .result-detail{
+      font-size:0.9rem;
+      color:var(--muted);
+      line-height:1.5;
+    }
 
-if __name__ == "__main__":
-    main()
+    .guide{
+      margin-top:14px;
+      font-size:0.88rem;
+      color:var(--muted);
+      line-height:1.5;
+    }
+  </style>
+</head>
+
+<body>
+<div class="wrap">
+<div class="card">
+
+<h2>Estimador de tiempo en trail</h2>
+<p class="helper">Introduce una carrera de referencia y una carrera objetivo. El cálculo ajusta por distancia, desnivel, tecnicidad, altitud media y calor.</p>
+
+<div class="grid-2">
+
+  <div class="block">
+    <div class="block-title">Carrera de referencia</div>
+
+    <div class="subgrid-2">
+      <div>
+        <label class="field-label" for="refDistance">Distancia (km)</label>
+        <input id="refDistance" type="number" min="0" step="0.1">
+      </div>
+      <div>
+        <label class="field-label" for="refElevation">Desnivel positivo (m)</label>
+        <input id="refElevation" type="number" min="0" step="1">
+      </div>
+    </div>
+
+    <div class="subgrid-3">
+      <div>
+        <label class="field-label" for="refTimeH">Horas</label>
+        <input id="refTimeH" type="number" min="0" step="1">
+      </div>
+      <div>
+        <label class="field-label" for="refTimeMin">Minutos</label>
+        <input id="refTimeMin" type="number" min="0" step="1">
+      </div>
+      <div>
+        <label class="field-label" for="refTimeSec">Segundos</label>
+        <input id="refTimeSec" type="number" min="0" step="1">
+      </div>
+    </div>
+
+    <label class="field-label" for="refTechnicality">Tecnicidad</label>
+    <select id="refTechnicality">
+      <option value="low">Baja</option>
+      <option value="medium">Media</option>
+      <option value="high">Alta</option>
+      <option value="very_high">Muy alta</option>
+    </select>
+
+    <label class="field-label" for="refAltitude">Altitud media</label>
+    <select id="refAltitude">
+      <option value="low">0–1.000 m</option>
+      <option value="mid">1.000–2.000 m</option>
+      <option value="high">2.000–3.000 m</option>
+    </select>
+
+    <label class="field-label" for="refHeat">Calor</label>
+    <select id="refHeat">
+      <option value="low">Poco</option>
+      <option value="medium">Medio</option>
+      <option value="high">Alto</option>
+    </select>
+
+    <div class="quick-buttons">
+      <button class="preset" data-target="reference" data-distance="42" data-elevation="3800" data-hours="5" data-minutes="15" data-seconds="0" data-technicality="high" data-altitude="mid" data-heat="low">Ejemplo 42 / 3800+</button>
+    </div>
+  </div>
+
+  <div class="block">
+    <div class="block-title">Carrera objetivo</div>
+
+    <div class="subgrid-2">
+      <div>
+        <label class="field-label" for="targetDistance">Distancia (km)</label>
+        <input id="targetDistance" type="number" min="0" step="0.1">
+      </div>
+      <div>
+        <label class="field-label" for="targetElevation">Desnivel positivo (m)</label>
+        <input id="targetElevation" type="number" min="0" step="1">
+      </div>
+    </div>
+
+    <div class="subgrid-3">
+      <div>
+        <label class="field-label" for="targetTimeH">Horas estimadas</label>
+        <input id="targetTimeH" type="number" min="0" step="1" readonly>
+      </div>
+      <div>
+        <label class="field-label" for="targetTimeMin">Minutos</label>
+        <input id="targetTimeMin" type="number" min="0" step="1" readonly>
+      </div>
+      <div>
+        <label class="field-label" for="targetTimeSec">Segundos</label>
+        <input id="targetTimeSec" type="number" min="0" step="1" readonly>
+      </div>
+    </div>
+
+    <label class="field-label" for="targetTechnicality">Tecnicidad</label>
+    <select id="targetTechnicality">
+      <option value="low">Baja</option>
+      <option value="medium">Media</option>
+      <option value="high">Alta</option>
+      <option value="very_high">Muy alta</option>
+    </select>
+
+    <label class="field-label" for="targetAltitude">Altitud media</label>
+    <select id="targetAltitude">
+      <option value="low">0–1.000 m</option>
+      <option value="mid">1.000–2.000 m</option>
+      <option value="high">2.000–3.000 m</option>
+    </select>
+
+    <label class="field-label" for="targetHeat">Calor</label>
+    <select id="targetHeat">
+      <option value="low">Poco</option>
+      <option value="medium">Medio</option>
+      <option value="high">Alto</option>
+    </select>
+
+    <div class="quick-buttons">
+      <button class="preset" data-target="target" data-distance="60" data-elevation="3000" data-technicality="low" data-altitude="mid" data-heat="low">Ejemplo 60 / 3000+</button>
+    </div>
+  </div>
+
+</div>
+
+<div class="calc-row">
+  <button class="calc-btn" id="btnEstimate">Estimar tiempo</button>
+  <button class="calc-btn" id="btnCopySummary">Copiar resumen</button>
+</div>
+
+<div class="actions">
+  <button id="clearAll">Borrar todo</button>
+</div>
+
+<div class="result-box">
+  <div class="result-main" id="resultMain">Tiempo estimado: —</div>
+  <div class="result-detail" id="resultDetail">Completa los datos y pulsa “Estimar tiempo”.</div>
+</div>
+
+<div class="guide">
+  <strong>Guía rápida:</strong><br>
+  Tecnicidad baja = terreno muy corrible.<br>
+  Tecnicidad media = sendero de montaña normal.<br>
+  Tecnicidad alta = terreno roto que frena bastante.<br>
+  Tecnicidad muy alta = terreno muy técnico.<br><br>
+  Calor poco = fresco o templado.<br>
+  Calor medio = calor moderado.<br>
+  Calor alto = calor claro y penalizante, o mucha exposición/humedad.
+</div>
+
+<div class="status" id="status">Pulsa el botón para calcular</div>
+
+</div>
+</div>
+
+<script>
+let currentSuccessFields = [];
+
+const TECHNICALITY_FACTORS = {
+  low: 1.00,
+  medium: 1.08,
+  high: 1.18,
+  very_high: 1.30
+};
+
+const ALTITUDE_FACTORS = {
+  low: 1.00,
+  mid: 1.04,
+  high: 1.09
+};
+
+const HEAT_FACTORS = {
+  low: 1.00,
+  medium: 1.04,
+  high: 1.09
+};
+
+const VERTICAL_EQUIVALENCE = 100;
+const FATIGUE_EXPONENT = 0.06;
+const MIN_COMBINED_ADJUSTMENT = 0.85;
+const MAX_COMBINED_ADJUSTMENT = 1.20;
+
+function v(id){
+  const el = document.getElementById(id);
+  const x = el.value;
+  return x === "" ? null : parseFloat(x);
+}
+
+function getSelectValue(id){
+  return document.getElementById(id).value;
+}
+
+function set(id, val){
+  document.getElementById(id).value = val;
+}
+
+function clearAllSuccess(){
+  document.querySelectorAll("input, select").forEach(el => el.classList.remove("success"));
+  currentSuccessFields = [];
+}
+
+function clearAllHighlight(){
+  document.querySelectorAll("input, select").forEach(el => el.classList.remove("highlight"));
+}
+
+function highlight(ids){
+  clearAllHighlight();
+  ids.forEach(id => {
+    const el = document.getElementById(id);
+    el.classList.add("highlight");
+    setTimeout(() => el.classList.remove("highlight"), 1000);
+  });
+}
+
+function setSuccess(ids){
+  clearAllSuccess();
+  ids.forEach(id => {
+    const el = document.getElementById(id);
+    el.classList.add("success");
+  });
+  currentSuccessFields = [...ids];
+}
+
+function handleManualEdit(){
+  clearAllSuccess();
+}
+
+function msg(t){
+  document.getElementById("status").innerText = t;
+}
+
+function kmEffort(distanceKm, elevationM){
+  return distanceKm + (elevationM / VERTICAL_EQUIVALENCE);
+}
+
+function combinedConditionFactor(technicality, altitude, heat){
+  const factor = TECHNICALITY_FACTORS[technicality] * ALTITUDE_FACTORS[altitude] * HEAT_FACTORS[heat];
+  return Math.max(MIN_COMBINED_ADJUSTMENT, Math.min(MAX_COMBINED_ADJUSTMENT, factor));
+}
+
+function fatigueFactor(referenceDistanceKm, targetDistanceKm){
+  if (!referenceDistanceKm || !targetDistanceKm) return 1;
+  return Math.pow(targetDistanceKm / referenceDistanceKm, FATIGUE_EXPONENT);
+}
+
+function referenceTimeMinutes(){
+  const h = v("refTimeH") || 0;
+  const m = v("refTimeMin") || 0;
+  const s = v("refTimeSec") || 0;
+  if (h === 0 && m === 0 && s === 0) return null;
+  return h * 60 + m + s / 60;
+}
+
+function setTargetTime(totalMinutes){
+  const totalSeconds = Math.round(totalMinutes * 60);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  set("targetTimeH", hours);
+  set("targetTimeMin", minutes);
+  set("targetTimeSec", seconds);
+  setSuccess(["targetTimeH", "targetTimeMin", "targetTimeSec"]);
+}
+
+function formatDuration(totalMinutes){
+  const totalSeconds = Math.round(totalMinutes * 60);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  return `${hours}h ${String(minutes).padStart(2, "0")}min ${String(seconds).padStart(2, "0")}s`;
+}
+
+function estimateTime(){
+  const refDistance = v("refDistance");
+  const refElevation = v("refElevation");
+  const refTime = referenceTimeMinutes();
+  const targetDistance = v("targetDistance");
+  const targetElevation = v("targetElevation");
+
+  if (!refDistance || refDistance <= 0){
+    highlight(["refDistance"]);
+    msg("Introduce una distancia válida en la carrera de referencia");
+    return;
+  }
+
+  if (refElevation == null || refElevation < 0){
+    highlight(["refElevation"]);
+    msg("Introduce un desnivel válido en la carrera de referencia");
+    return;
+  }
+
+  if (!refTime || refTime <= 0){
+    highlight(["refTimeH", "refTimeMin", "refTimeSec"]);
+    msg("Introduce un tiempo válido en la carrera de referencia");
+    return;
+  }
+
+  if (!targetDistance || targetDistance <= 0){
+    highlight(["targetDistance"]);
+    msg("Introduce una distancia válida en la carrera objetivo");
+    return;
+  }
+
+  if (targetElevation == null || targetElevation < 0){
+    highlight(["targetElevation"]);
+    msg("Introduce un desnivel válido en la carrera objetivo");
+    return;
+  }
+
+  const refTechnicality = getSelectValue("refTechnicality");
+  const refAltitude = getSelectValue("refAltitude");
+  const refHeat = getSelectValue("refHeat");
+
+  const targetTechnicality = getSelectValue("targetTechnicality");
+  const targetAltitude = getSelectValue("targetAltitude");
+  const targetHeat = getSelectValue("targetHeat");
+
+  const refEffort = kmEffort(refDistance, refElevation);
+  const targetEffort = kmEffort(targetDistance, targetElevation);
+
+  const refCondition = combinedConditionFactor(refTechnicality, refAltitude, refHeat);
+  const targetCondition = combinedConditionFactor(targetTechnicality, targetAltitude, targetHeat);
+
+  const normalizedReferencePace = refTime / (refEffort * refCondition);
+  const durationPenalty = fatigueFactor(refDistance, targetDistance);
+
+  const estimatedMinutes = normalizedReferencePace * targetEffort * targetCondition * durationPenalty;
+
+  setTargetTime(estimatedMinutes);
+
+  document.getElementById("resultMain").innerText = `Tiempo estimado: ${formatDuration(estimatedMinutes)}`;
+  document.getElementById("resultDetail").innerHTML = `
+    Esfuerzo referencia: <strong>${refEffort.toFixed(2)}</strong> km-esfuerzo.<br>
+    Esfuerzo objetivo: <strong>${targetEffort.toFixed(2)}</strong> km-esfuerzo.<br>
+    Factor condiciones referencia: <strong>${refCondition.toFixed(3)}</strong>.<br>
+    Factor condiciones objetivo: <strong>${targetCondition.toFixed(3)}</strong>.<br>
+    Penalización por duración: <strong>${durationPenalty.toFixed(3)}</strong>.
+  `;
+
+  msg("Tiempo estimado correctamente");
+}
+
+function clearAll(){
+  document.querySelectorAll("input").forEach(i => {
+    i.value = "";
+    i.classList.remove("success");
+    i.classList.remove("highlight");
+  });
+
+  document.querySelectorAll("select").forEach(s => {
+    s.classList.remove("success");
+    s.classList.remove("highlight");
+  });
+
+  set("refTechnicality", "low");
+  set("refAltitude", "low");
+  set("refHeat", "low");
+  set("targetTechnicality", "low");
+  set("targetAltitude", "low");
+  set("targetHeat", "low");
+
+  currentSuccessFields = [];
+  document.getElementById("resultMain").innerText = "Tiempo estimado: —";
+  document.getElementById("resultDetail").innerText = "Completa los datos y pulsa “Estimar tiempo”.";
+  msg("Todo borrado");
+}
+
+function applyPreset(button){
+  const target = button.dataset.target;
+
+  if (target === "reference"){
+    set("refDistance", button.dataset.distance || "");
+    set("refElevation", button.dataset.elevation || "");
+    set("refTimeH", button.dataset.hours || "");
+    set("refTimeMin", button.dataset.minutes || "");
+    set("refTimeSec", button.dataset.seconds || "");
+    set("refTechnicality", button.dataset.technicality || "low");
+    set("refAltitude", button.dataset.altitude || "low");
+    set("refHeat", button.dataset.heat || "low");
+    highlight(["refDistance", "refElevation", "refTimeH", "refTimeMin", "refTimeSec", "refTechnicality", "refAltitude", "refHeat"]);
+    msg("Carrera de referencia actualizada");
+  }
+
+  if (target === "target"){
+    set("targetDistance", button.dataset.distance || "");
+    set("targetElevation", button.dataset.elevation || "");
+    set("targetTechnicality", button.dataset.technicality || "low");
+    set("targetAltitude", button.dataset.altitude || "low");
+    set("targetHeat", button.dataset.heat || "low");
+    highlight(["targetDistance", "targetElevation", "targetTechnicality", "targetAltitude", "targetHeat"]);
+    msg("Carrera objetivo actualizada");
+  }
+
+  clearAllSuccess();
+}
+
+function buildSummary(){
+  const result = document.getElementById("resultMain").innerText;
+  if (result.includes("—")){
+    msg("Primero calcula una estimación");
+    return null;
+  }
+
+  return [
+    "Carrera de referencia:",
+    `- Distancia: ${v("refDistance") || 0} km`,
+    `- Desnivel: ${v("refElevation") || 0} m+`,
+    `- Tiempo: ${(v("refTimeH") || 0)}h ${(v("refTimeMin") || 0)}min ${(v("refTimeSec") || 0)}s`,
+    `- Tecnicidad: ${document.getElementById("refTechnicality").options[document.getElementById("refTechnicality").selectedIndex].text}`,
+    `- Altitud: ${document.getElementById("refAltitude").options[document.getElementById("refAltitude").selectedIndex].text}`,
+    `- Calor: ${document.getElementById("refHeat").options[document.getElementById("refHeat").selectedIndex].text}`,
+    "",
+    "Carrera objetivo:",
+    `- Distancia: ${v("targetDistance") || 0} km`,
+    `- Desnivel: ${v("targetElevation") || 0} m+`,
+    `- Tecnicidad: ${document.getElementById("targetTechnicality").options[document.getElementById("targetTechnicality").selectedIndex].text}`,
+    `- Altitud: ${document.getElementById("targetAltitude").options[document.getElementById("targetAltitude").selectedIndex].text}`,
+    `- Calor: ${document.getElementById("targetHeat").options[document.getElementById("targetHeat").selectedIndex].text}`,
+    "",
+    result
+  ].join("\n");
+}
+
+async function copySummary(){
+  const summary = buildSummary();
+  if (!summary) return;
+
+  try {
+    await navigator.clipboard.writeText(summary);
+    msg("Resumen copiado al portapapeles");
+  } catch (e) {
+    msg("No se pudo copiar el resumen");
+  }
+}
+
+document.getElementById("btnEstimate").onclick = estimateTime;
+document.getElementById("clearAll").onclick = clearAll;
+document.getElementById("btnCopySummary").onclick = copySummary;
+
+document.querySelectorAll(".preset").forEach(button => {
+  button.addEventListener("click", () => applyPreset(button));
+});
+
+document.querySelectorAll("input, select").forEach(el => {
+  el.addEventListener("input", handleManualEdit);
+  el.addEventListener("change", handleManualEdit);
+});
+</script>
+</body>
+</html>
