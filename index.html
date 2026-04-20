@@ -129,6 +129,7 @@
       border:1px solid var(--readonly-border);
       border-radius:10px;
       padding:10px;
+      margin-top:8px;
       margin-bottom:10px;
     }
 
@@ -399,6 +400,28 @@
           </div>
         </div>
 
+        <label class="field-label" for="targetTechnicality">Tecnicidad prevista</label>
+        <select id="targetTechnicality">
+          <option value="low">Baja</option>
+          <option value="medium">Media</option>
+          <option value="high">Alta</option>
+          <option value="very_high">Muy alta</option>
+        </select>
+
+        <label class="field-label" for="targetAltitude">Altitud media</label>
+        <select id="targetAltitude">
+          <option value="low">0–1.000 m</option>
+          <option value="mid">1.000–2.000 m</option>
+          <option value="high">2.000–3.000 m</option>
+        </select>
+
+        <label class="field-label" for="targetHeat">Calor previsto</label>
+        <select id="targetHeat">
+          <option value="low">Poco</option>
+          <option value="medium">Medio</option>
+          <option value="high">Alto</option>
+        </select>
+
         <div class="result-wrap">
           <div class="result-input-label">
             <label class="field-label" for="targetTimeH">Tiempo estimado</label>
@@ -424,29 +447,8 @@
             Estos campos no se rellenan manualmente. Se completan automáticamente al pulsar
             <strong>Estimar tiempo</strong>.
           </div>
+          <div class="target-note" id="targetRangeNote"></div>
         </div>
-
-        <label class="field-label" for="targetTechnicality">Tecnicidad prevista</label>
-        <select id="targetTechnicality">
-          <option value="low">Baja</option>
-          <option value="medium">Media</option>
-          <option value="high">Alta</option>
-          <option value="very_high">Muy alta</option>
-        </select>
-
-        <label class="field-label" for="targetAltitude">Altitud media</label>
-        <select id="targetAltitude">
-          <option value="low">0–1.000 m</option>
-          <option value="mid">1.000–2.000 m</option>
-          <option value="high">2.000–3.000 m</option>
-        </select>
-
-        <label class="field-label" for="targetHeat">Calor previsto</label>
-        <select id="targetHeat">
-          <option value="low">Poco</option>
-          <option value="medium">Medio</option>
-          <option value="high">Alto</option>
-        </select>
 
         <div class="target-actions">
           <button class="calc-btn" id="btnEstimate">Estimar tiempo</button>
@@ -612,6 +614,32 @@ function ultraCourseMultiplier(distanceKm, effortKm, profile){
   return multiplier;
 }
 
+function extrapolationPenalty(referenceRace, targetRace, profile){
+  const pf = profileFactors(profile);
+  const distanceRatio = targetRace.distance / referenceRace.distance;
+  const effortRatio = targetRace.effort / referenceRace.effort;
+
+  let penalty = 1;
+
+  if (distanceRatio > 1){
+    penalty *= Math.pow(distanceRatio, 0.045 * pf.longDistanceBias);
+  }
+
+  if (distanceRatio > 1.6){
+    penalty *= Math.pow(distanceRatio / 1.6, 0.07 * pf.longDistanceBias);
+  }
+
+  if (distanceRatio > 2.2){
+    penalty *= Math.pow(distanceRatio / 2.2, 0.09 * pf.ultraBias);
+  }
+
+  if (effortRatio > 1.15){
+    penalty *= Math.pow(effortRatio, 0.035 * pf.longDistanceBias);
+  }
+
+  return penalty;
+}
+
 function timeToMinutes(prefix){
   const h = v(`${prefix}TimeH`) || 0;
   const m = v(`${prefix}TimeMin`) || 0;
@@ -683,17 +711,26 @@ function similarityWeight(referenceRace, targetRace){
   return 1 / (0.18 + totalGap);
 }
 
-function weightedAthleteIndex(references, targetRace){
+function weightedAthleteIndex(references, targetRace, profile){
   if (references.length === 1){
-    return references[0].athleteIndex;
+    return references[0].athleteIndex * extrapolationPenalty(references[0], targetRace, profile);
   }
 
   const weights = references.map(ref => similarityWeight(ref, targetRace));
   const totalWeight = weights.reduce((a, b) => a + b, 0);
 
   return references.reduce((sum, ref, index) => {
-    return sum + ref.athleteIndex * (weights[index] / totalWeight);
+    const adjustedIndex = ref.athleteIndex * extrapolationPenalty(ref, targetRace, profile);
+    return sum + adjustedIndex * (weights[index] / totalWeight);
   }, 0);
+}
+
+function formatDurationFromMinutes(totalMinutes){
+  const totalSeconds = Math.round(totalMinutes * 60);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  return `${hours}h ${String(minutes).padStart(2, "0")}min ${String(seconds).padStart(2, "0")}s`;
 }
 
 function setTargetTime(totalMinutes){
@@ -706,6 +743,11 @@ function setTargetTime(totalMinutes){
   set("targetTimeMin", minutes);
   set("targetTimeSec", seconds);
   setSuccess(["targetTimeH", "targetTimeMin", "targetTimeSec"]);
+
+  const low = totalMinutes * 0.98;
+  const high = totalMinutes * 1.02;
+  document.getElementById("targetRangeNote").innerText =
+    `Rango orientativo: ${formatDurationFromMinutes(low)} – ${formatDurationFromMinutes(high)} (±2%)`;
 }
 
 function estimateTime(){
@@ -741,7 +783,7 @@ function estimateTime(){
   if (ref1Ok) references.push(getRace("ref1", profile));
   if (ref2Ok) references.push(getRace("ref2", profile));
 
-  const athleteIndex = weightedAthleteIndex(references, targetRace);
+  const athleteIndex = weightedAthleteIndex(references, targetRace, profile);
   const estimatedMinutes = athleteIndex * targetRace.effort * targetRace.condition * targetRace.ultra;
 
   setTargetTime(estimatedMinutes);
@@ -780,6 +822,7 @@ function clearAll(){
   set("athleteProfile", "balanced");
 
   currentSuccessFields = [];
+  document.getElementById("targetRangeNote").innerText = "";
   msg("");
 }
 
