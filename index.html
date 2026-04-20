@@ -271,9 +271,9 @@
 
         <label class="field-label" for="refTechnicality">Tecnicidad</label>
         <select id="refTechnicality">
-          <option value="low">Baja</option>
+          <option value="low">Poca</option>
           <option value="medium">Media</option>
-          <option value="high">Alta</option>
+          <option value="high">Mucha</option>
           <option value="very_high">Muy alta</option>
         </select>
 
@@ -293,9 +293,9 @@
 
         <div class="guide">
           <strong>Guía de tecnicidad</strong><br>
-          Baja = terreno muy corrible.<br>
+          Poca = terreno muy corrible.<br>
           Media = sendero de montaña normal.<br>
-          Alta = terreno roto que frena bastante.<br>
+          Mucha = terreno roto que frena bastante.<br>
           Muy alta = terreno muy técnico.
         </div>
       </div>
@@ -343,9 +343,9 @@
 
         <label class="field-label" for="targetTechnicality">Tecnicidad prevista</label>
         <select id="targetTechnicality">
-          <option value="low">Baja</option>
+          <option value="low">Poca</option>
           <option value="medium">Media</option>
-          <option value="high">Alta</option>
+          <option value="high">Mucha</option>
           <option value="very_high">Muy alta</option>
         </select>
 
@@ -402,7 +402,8 @@ const HEAT_FACTORS = {
 
 const VERTICAL_EQUIVALENCE = 100;
 const MIN_COMBINED_ADJUSTMENT = 0.85;
-const MAX_COMBINED_ADJUSTMENT = 1.20;
+// Subido para evitar que distintas combinaciones queden "aplastadas" en el mismo techo
+const MAX_COMBINED_ADJUSTMENT = 1.80;
 
 function v(id){
   const el = document.getElementById(id);
@@ -611,7 +612,7 @@ function buildSummary(){
     `- Calor previsto: ${document.getElementById("targetHeat").options[document.getElementById("targetHeat").selectedIndex].text}`,
     "",
     `Tiempo estimado: ${(v("targetTimeH") || 0)}h ${(v("targetTimeMin") || 0)}min ${(v("targetTimeSec") || 0)}s`
-  ].join("\n");
+  ].join("\\n");
 }
 
 async function copySummary(){
