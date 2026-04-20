@@ -22,7 +22,6 @@
 
       --readonly-bg:#eef2f7;
       --readonly-border:#cbd5e1;
-
       --badge-bg:#dbeafe;
       --badge-border:#93c5fd;
       --badge-text:#1d4ed8;
@@ -463,6 +462,28 @@ function combinedConditionFactor(technicality, altitude, heat){
   return Math.max(MIN_COMBINED_ADJUSTMENT, Math.min(MAX_COMBINED_ADJUSTMENT, factor));
 }
 
+function fatigueFactor(referenceDistanceKm, targetDistanceKm, targetEffort){
+  if (!referenceDistanceKm || !targetDistanceKm) return 1;
+
+  const ratio = targetDistanceKm / referenceDistanceKm;
+
+  let penalty = Math.pow(ratio, 0.055);
+
+  if (targetDistanceKm > 120){
+    penalty *= 1 + ((targetDistanceKm - 120) * 0.0015);
+  }
+
+  if (targetDistanceKm > 160){
+    penalty *= 1 + ((targetDistanceKm - 160) * 0.0025);
+  }
+
+  if (targetEffort > 220){
+    penalty *= 1 + Math.min((targetEffort - 220) * 0.0008, 0.06);
+  }
+
+  return penalty;
+}
+
 function referenceTimeMinutes(){
   const h = v("refTimeH") || 0;
   const m = v("refTimeMin") || 0;
@@ -470,44 +491,6 @@ function referenceTimeMinutes(){
 
   if (h === 0 && m === 0 && s === 0) return null;
   return h * 60 + m + s / 60;
-}
-
-function ultraDistancePenalty(referenceDistanceKm, targetDistanceKm, targetEffort){
-  if (!referenceDistanceKm || !targetDistanceKm) return 1;
-
-  const ratio = targetDistanceKm / referenceDistanceKm;
-
-  let penalty = Math.pow(ratio, 0.08);
-
-  if (ratio > 2){
-    penalty *= Math.pow(ratio / 2, 0.10);
-  }
-
-  if (ratio > 3){
-    penalty *= Math.pow(ratio / 3, 0.18);
-  }
-
-  if (ratio > 4){
-    penalty *= Math.pow(ratio / 4, 0.22);
-  }
-
-  if (targetDistanceKm >= 100){
-    penalty *= 1.03;
-  }
-
-  if (targetDistanceKm >= 140){
-    penalty *= 1.04;
-  }
-
-  if (targetDistanceKm >= 170){
-    penalty *= 1.05;
-  }
-
-  if (targetEffort >= 220){
-    penalty *= 1.03;
-  }
-
-  return penalty;
 }
 
 function setTargetTime(totalMinutes){
@@ -569,7 +552,7 @@ function estimateTime(){
   const targetCondition = combinedConditionFactor(targetTechnicality, targetAltitude, targetHeat);
 
   const normalizedReferencePace = refTime / (refEffort * refCondition);
-  const durationPenalty = ultraDistancePenalty(refDistance, targetDistance, targetEffort);
+  const durationPenalty = fatigueFactor(refDistance, targetDistance, targetEffort);
 
   const estimatedMinutes =
     normalizedReferencePace *
