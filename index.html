@@ -129,6 +129,7 @@
       border:1px solid var(--readonly-border);
       border-radius:10px;
       padding:10px;
+      margin-top:8px;
       margin-bottom:10px;
     }
 
@@ -399,6 +400,28 @@
           </div>
         </div>
 
+        <label class="field-label" for="targetTechnicality">Tecnicidad prevista</label>
+        <select id="targetTechnicality">
+          <option value="low">Baja</option>
+          <option value="medium">Media</option>
+          <option value="high">Alta</option>
+          <option value="very_high">Muy alta</option>
+        </select>
+
+        <label class="field-label" for="targetAltitude">Altitud media</label>
+        <select id="targetAltitude">
+          <option value="low">0–1.000 m</option>
+          <option value="mid">1.000–2.000 m</option>
+          <option value="high">2.000–3.000 m</option>
+        </select>
+
+        <label class="field-label" for="targetHeat">Calor previsto</label>
+        <select id="targetHeat">
+          <option value="low">Poco</option>
+          <option value="medium">Medio</option>
+          <option value="high">Alto</option>
+        </select>
+
         <div class="result-wrap">
           <div class="result-input-label">
             <label class="field-label" for="targetTimeH">Tiempo estimado</label>
@@ -425,28 +448,6 @@
             <strong>Estimar tiempo</strong>.
           </div>
         </div>
-
-        <label class="field-label" for="targetTechnicality">Tecnicidad prevista</label>
-        <select id="targetTechnicality">
-          <option value="low">Baja</option>
-          <option value="medium">Media</option>
-          <option value="high">Alta</option>
-          <option value="very_high">Muy alta</option>
-        </select>
-
-        <label class="field-label" for="targetAltitude">Altitud media</label>
-        <select id="targetAltitude">
-          <option value="low">0–1.000 m</option>
-          <option value="mid">1.000–2.000 m</option>
-          <option value="high">2.000–3.000 m</option>
-        </select>
-
-        <label class="field-label" for="targetHeat">Calor previsto</label>
-        <select id="targetHeat">
-          <option value="low">Poco</option>
-          <option value="medium">Medio</option>
-          <option value="high">Alto</option>
-        </select>
 
         <div class="target-actions">
           <button class="calc-btn" id="btnEstimate">Estimar tiempo</button>
@@ -612,7 +613,6 @@ function ultraCourseMultiplier(distanceKm, effortKm, profile){
   return multiplier;
 }
 
-/* Penalización ligera cuando extrapolas a una carrera más larga */
 function extrapolationPenalty(referenceRace, targetRace, profile){
   const pf = profileFactors(profile);
   const distanceRatio = targetRace.distance / referenceRace.distance;
